@@ -1,0 +1,72 @@
+#################################################################
+## Practical 6 for GEOM184 - Open Source GIS ##
+## 27/02/2025 ##
+## Creating a ShinyApp ##
+## Server.R ##
+## code by Diego Panici (d.panici@exeter.ac.uk) ##
+#################################################################
+
+  
+  # Render leaflet map ----
+  output$map <- renderLeaflet({
+    
+    leaflet() %>%
+      setView(lng = 13.533545, lat = 45.850065, zoom = 11.3) %>%
+      addProviderTiles(providers$OpenStreetMap, group = "Colour") %>%
+      addPolylines(data = river, color = "blue", weight = 2, opacity = 0.8, group = "River") %>%
+      addCircles(data = bridges,
+                 color = "black",
+                 fillColor="purple",
+                 fillOpacity=0.8,
+                 weight = 2,
+                 radius = 50,
+                 group = "Bridges")
+    
+  })
+
+
+
+
+
+
+
+
+# Add popups for large wood points
+#observe({
+#  leafletProxy("map") %>%
+#    clearMarkers() %>%
+#    addCircleMarkers(data = clusters, fillColor = ~pal_clusters(CLUSTER_ID), color = "black", 
+#                     weight = 1, radius = 5, stroke = TRUE, fillOpacity = 0.7,
+#                     popup = ~paste("<b>Type:</b>", Type, "<br><b>Imagery used:</b>", Imagery, "<br><b>Cluster ID:</b>", CLUSTER_ID),
+#                     group = "Large Wood")
+#})
+
+
+  
+  
+  
+  # Render leaflet map ----
+  output$map <- renderLeaflet({
+    
+    leaflet() %>%
+      setView(lng = 13.533545, lat = 45.850065, zoom = 11.3) %>%
+      addProviderTiles(providers$OpenStreetMap, group = "Colour") %>%
+      addPolylines(data = river, color = "blue", weight = 2, opacity = 0.8, group = "River") %>%
+      addCircles(data = bridges,
+                 color = "black",
+                 fillColor = "purple",
+                 fillOpacity = 0.8,
+                 weight = 2,
+                 radius = 50,
+                 group = "Bridges") %>%
+      addPolylines(data = distance_lines, 
+                   color = "red", 
+                   weight = 2, 
+                   opacity = 0.8, 
+                   group = "Distance Lines")
+  })
+  
+  
+  
+  
+  
