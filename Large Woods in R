@@ -1,0 +1,165 @@
+#################################################################
+##           Practical 5 for GEOM184 - Open Source GIS         ##
+##                      23/02/2025                             ##
+##              Using R for geospatial analysis                ##
+##        code by Diego Panici (d.panici@exeter.ac.uk)         ##
+#################################################################
+
+
+------------------------------------------------------------------------------------------------
+  
+  # 1.0 Part A - Load packages and libraries ----
+
+install.packages("maps", "sf", "mapproj", "terra", "gridextra", "ggplot2", "dplyr", "rosm")
+
+#loading libraries
+library(ggplot2)
+library(maps)
+library(sf)
+library(terra)
+library(gridExtra)
+library(dplyr)
+library(rosm)
+
+# 2.0 Part B - Work with large wood datasets ----
+## 2.1 Add input files ----
+lw_points <- st_read("LW_Type.shp")       # Load large wood points
+lw_points <- st_transform(lw_points, crs=4326)
+river <- st_read("RiverIsonzo.shp")        # Load river centerline
+river <-st_transform(river, crs=4326)
+bridges <-st_read("BridgesIsonzo.shp")
+bridges <-st_transform(bridges, crs=4326)
+
+
+## 2.3 Create a heatmap ----
+plot1 + 
+  stat_density2d(data = lw_points, aes(x = st_coordinates(lw_points)[,1], 
+                                       y = st_coordinates(lw_points)[,2], 
+                                       fill = ..level..), 
+                 geom = "polygon", alpha = 0.6, h = c(0.01, 0.01)) +
+  scale_fill_viridis_c(name = "LW Density")  # Using Viridis colour scale
+
+bridges <- st_read("BridgesIsonzo.shp")    # Load bridge locations
+
+#Visualise data in context
+plot(lw_points)
+
+
+
+## 2.2 Plot points within a map ----
+
+#Get bounding box from river data to define basemap extent
+buff <- st_buffer(river, dist=2000) # Create a buffer of 2km around river limits
+bbox <- st_bbox(buff)  # Extract min/max coordinates
+#Download the basemap using ROSM
+basemap <- osm.image(x = bbox, type = "osm")
+
+
+
+
+
+#Plot with ggplot
+plot1 <- ggplot() +
+  # Add the basemap
+  annotation_raster(basemap, xmin=bbox["xmin"], xmax=bbox["xmax"], 
+                    ymin=bbox["ymin"], ymax=bbox["ymax"]) +  
+  # Add river (line)
+  geom_sf(data = river, aes(color = "River Isonzo"), size = 1.2) +  
+  # Add bridges (points)
+  geom_sf(data = bridges, aes(color = "Bridges"), size = 2, shape = 21, fill = "red") +  
+  # Add large wood (points)
+  geom_sf(data = lw_points, aes(color = "Large wood"), size = 2, shape = 21, fill = "white") +  
+  #add a scalebar
+  ggspatial::annotation_scale( 
+    location = "tr", #location on the top right
+    bar_cols = c("black", "white")
+  ) +
+  #add a North arrow
+  ggspatial::annotation_north_arrow( 
+    location = "br", which_north = "true", #bottom-right and showing true North
+    pad_x = unit(0.4, "in"), pad_y = unit(0.4, "in"),
+    style = ggspatial::north_arrow_nautical(
+      fill = c("black", "white"),
+      line_col = "grey20"
+    )
+  ) +
+  # Define a manual color scale for legend
+  scale_color_manual(name = "Legend", values = c("River Isonzo" = "blue", 
+                                                 "Bridges" = "red", 
+                                                 "Large wood" = "orange")) +
+  # Titles and theme
+  labs(title = "Large wood on the River Isonzo",
+       subtitle = "Using OpenStreetMap Basemap",
+       x = "Longitude", y = "Latitude")+
+  theme_minimal()
+
+#Visualise your plot
+plot1
+
+
+
+## 2.3 Create a heatmap ----
+plot1 + 
+  stat_density2d(data = lw_points, aes(x = st_coordinates(lw_points)[,1], 
+                                       y = st_coordinates(lw_points)[,2], 
+                                       fill = ..level..), 
+                 geom = "polygon", alpha = 0.5, h = c(0.01, 0.01)) +
+  scale_fill_viridis_c(name = "LW_Density")  # Using Viridis colour scale
+
+
+## 2.6 Hexagonal binned density ----
+plot1 + 
+  geom_hex(data = lw_points, aes(x = st_coordinates(lw_points)[,1], 
+                                 y = st_coordinates(lw_points)[,2], 
+                                 fill = ..count..), bins = 30) + 
+  scale_fill_viridis_c(name = "LW density")
+
+
+
+library(terra)
+
+library(terra)
+
+# Load the raster
+DTM <- rast("DTM_Isonzo.tif")
+
+# Reproject to match river CRS
+DTM <- project(DTM, crs(river))
+
+# Remove 0 values
+DTM <- ifel(DTM == 0, NA, DTM)
+
+# Clip with bounding box (make sure bbox is an extent object)
+DTM_clip <- crop(DTM, bbox)
+
+# Calculate aspect
+aspect <- terrain(DTM_clip, "aspect", unit = "degrees")
+
+# Convert to data frame for plotting
+aspect_df <- as.data.frame(aspect, xy = TRUE)
+
+# Plot
+ggplot() +
+  geom_raster(data = aspect_df, aes(x = x, y = y, fill = aspect)) +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_minimal()
+
+
+install.packages("whitebox")
+whitebox::install_whitebox()
+library(whitebox)
+
+
+
+wbt_d8_flow_accumulation("DTM_Isonzo.tif","flow_accum.tif")
+
+flow_accum <- rast("flow_accum.tif")
+flow_accum <- project(flow_accum, crs(river))
+flow_accum <- crop(flow_accum,bbox)
+
+
+# Writing a raster
+writeRaster(YOUR_RASTER, "YOUR_NAME_HERE.tif", overwrite = TRUE)
+# Writing a vector
+st_write(YOUR_VECTOR, "YOUR_NAME_HERE.shp", overwrite = TRUE)
+
