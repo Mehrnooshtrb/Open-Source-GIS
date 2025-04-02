@@ -1,0 +1,142 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var table = ee.FeatureCollection("projects/ee-geom180torabi/assets/LoughNeagh"),
+    imageCollection = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+
+// Import Lough Neagh region
+var NI = ee.FeatureCollection("projects/ee-geom180torabi/assets/LoughNeagh");
+
+// Compute bounding box (rectangle) from Lough Neagh polygon
+var bbox = NI.bounds();
+
+// Import Sentinel-2 level-2A harmonized dataset
+var S2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED");
+var S2_NI = S2.filterBounds(bbox).filterMetadata('CLOUDY_PIXEL_PERCENTAGE', 'less_than', 30);
+
+// Function to calculate the median image for a given time period
+var getQuarterlyMedian = function(startDate, endDate) {
+  var quarterlyImage = ee.Image(S2_NI.filterDate(startDate, endDate).median()).clip(NI);
+  return quarterlyImage;
+};
+
+// NDVI calculation function
+var getQuarterlyNDVI = function(image) {
+  return image.normalizedDifference(['B8', 'B4']).rename('NDVI').clip(NI);
+};
+
+// ABDI calculation function (adjust bands as needed)
+var getQuarterlyABDI = function(image) {
+  return image.normalizedDifference(['B3', 'B2']).rename('ABDI').clip(NI);
+};
+
+// Visualization parameters for NDVI and ABDI
+var paletteNDVI = ['red', 'white', 'green'];
+var visNDVI = {min: -1, max: 1, palette: paletteNDVI};
+var paletteABDI = ['blue', 'white', 'yellow'];
+var visABDI = {min: -1, max: 1, palette: paletteABDI};
+
+// Create two map instances
+var map1 = ui.Map();
+var map2 = ui.Map();
+map1.centerObject(NI, 10);
+map2.centerObject(NI, 10);
+
+// Add maps to the user interface
+var panel1 = ui.Panel({widgets: [map1], style: {width: '50%', height: '100%'}});
+var panel2 = ui.Panel({widgets: [map2], style: {width: '50%', height: '100%'}});
+
+// Split panel to hold both maps
+var splitPanel = ui.SplitPanel({firstPanel: panel1, secondPanel: panel2, wipe: true});
+ui.root.clear();
+ui.root.add(splitPanel);
+
+// Link the two maps
+var mapLinker = ui.Map.Linker([map1, map2]);
+
+// Define the list of years and quarters
+var years = ee.List.sequence(2020, 2024);
+var quarters = ee.List.sequence(1, 4);
+
+// Lists to hold NDVI and ABDI statistics
+var ndviValues = [];
+var abdiValues = [];
+
+// Loop through years and quarters
+years.evaluate(function(yearsList) {
+  quarters.evaluate(function(quartersList) {
+    yearsList.forEach(function(year) {
+      quartersList.forEach(function(quarter) {
+        var startDate = ee.Date.fromYMD(year, (quarter - 1) * 3 + 1, 1);
+        var endDate = startDate.advance(3, 'month').advance(-1, 'day');
+        var label = 'Q' + quarter + '-' + year;
+
+        // Calculate median image
+        var image = getQuarterlyMedian(startDate, endDate);
+
+        // Calculate NDVI and ABDI
+        var ndvi = getQuarterlyNDVI(image);
+        var abdi = getQuarterlyABDI(image);
+
+        // Add NDVI and ABDI to maps
+        map1.addLayer(ndvi, visNDVI, label + ' NDVI');
+        map2.addLayer(abdi, visABDI, label + ' ABDI');
+
+        // Calculate NDVI statistics
+        var ndviStats = ndvi.reduceRegion({
+          reducer: ee.Reducer.mean().combine(ee.Reducer.percentile([5, 95]), '', true),
+          geometry: NI.geometry(),
+          scale: 10,
+          bestEffort: true
+        });
+
+        // Collect NDVI statistics
+        ndviValues.push(ee.Feature(null, {
+          label: label,
+          Mean: ndviStats.get('NDVI_mean'),
+          p5: ndviStats.get('NDVI_p5'),
+          p95: ndviStats.get('NDVI_p95')
+        }));
+        
+        // Define export parameters
+    var exportParams = {
+      scale: 10,
+      region: NI.geometry(),
+      fileFormat: 'GeoTIFF',
+      maxPixels: 1e13
+    };
+
+    // Export NDVI for each quarter and year
+    Export.image.toDrive({
+      image: ndvi,
+      region: NI.geometry(),
+      description: 'NDVI_Q' + quarter + '_' + year,
+      folder: 'EarthEngine_Exports',
+      fileNamePrefix: 'NDVI_Q' + quarter + '_' + year
+    });
+    
+    // Export ABDI for each quarter and year
+    Export.image.toDrive({
+      image: abdi,
+      region: NI.geometry(),
+      description: 'ABDI_Q' + quarter + '_' + year,
+      folder: 'EarthEngine_Exports',
+      fileNamePrefix: 'ABDI_Q' + quarter + '_' + year
+        });
+      });
+    });
+    
+// Create and display NDVI chart
+var ndviChart = ui.Chart.feature.byFeature(ee.FeatureCollection(ndviValues), 'label', ['Mean', 'p5', 'p95'])
+  .setChartType('LineChart')
+  .setOptions({
+    title: 'NDVI over time',
+    hAxis: {title: 'Quarter'},
+    vAxis: {title: 'NDVI Value'},
+    lineWidth: 1,
+    pointSize: 4
+  });
+
+// Add NDVI chart to the UI
+ui.root.add(ndviChart);
+
+}); });
