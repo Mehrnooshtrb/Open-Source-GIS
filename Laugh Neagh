@@ -113,5 +113,3 @@ years.evaluate(function(yearsList) {
     ui.root.add(ndviChart);
   });
 });
-
-
