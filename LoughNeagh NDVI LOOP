@@ -1,0 +1,76 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var table = ee.FeatureCollection("projects/ee-geom180torabi/assets/LoughNeagh"),
+    imageCollection = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var NI = ee.FeatureCollection("projects/ee-geom180torabi/assets/LoughNeagh");
+Map.addLayer(NI);
+Map.centerObject(NI, 10); // Focus on the region of interest
+
+// Compute bounding box (rectangle) from Lough Neagh polygon
+var bbox = NI.bounds();  // Use NI.bounds() instead of table.bounds()
+
+// Import Sentinel-2 level-2A harmonized dataset
+var S2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED");
+var S2_NI = S2.filterBounds(bbox)
+    // Cloud cover filtering
+    .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', 'less_than', 30);
+
+var years = ee.List.sequence(2020, 2024);
+var quarters = ee.List.sequence(1, 4);
+
+// Define a function to calculate median for a given time period
+var getQuarterlyMedian = function(startDate, endDate) {
+  var quarterlyImage = ee.Image(S2_NI.filterDate(startDate, endDate).median()).clip(NI);
+  return quarterlyImage;
+};
+
+// Define a function to calculate median NDVI for a given time period
+var getQuarterlyNDVI = function(image) {
+  var ndvi = image.normalizedDifference(['B8', 'B4']);
+  return ndvi.clip(NI);
+};
+
+// Calculate NDVI for a specific date range (e.g., 2020 Q1)
+var startDate = '2020-01-01';
+var endDate = '2020-03-31';
+var quarterlyImage = getQuarterlyMedian(startDate, endDate);
+var ndviImage = getQuarterlyNDVI(quarterlyImage);
+
+// Define visualization parameters for NDVI
+var paletteNDVI = ['red', 'white', 'green'];
+var visNDVI = {min: -1, max: 1, palette: paletteNDVI};
+
+// Add NDVI layer to the map
+Map.addLayer(ndviImage, visNDVI, 'NDVI 2020 Q1');
+
+// Define the list of years and quarters
+years.evaluate(function(yearsList) {
+  quarters.evaluate(function(quartersList) {
+    
+    // Loop through each year
+    yearsList.map(function(year) {
+      
+      // Loop through each quarter
+      quartersList.map(function(quarter) {
+        
+        // Calculate start and end dates for each quarter
+        var startDate = ee.Date.fromYMD(year, (quarter - 1) * 3 + 1, 1);
+        var endDate = startDate.advance(3, 'month').advance(-1, 'day');
+        
+        // Define label for the quarter and year
+        var label = 'Q' + quarter + '-' + year;
+        
+        // Get the median image for the quarter
+        var image = getQuarterlyMedian(startDate, endDate);
+        
+        // Calculate NDVI for the quarter
+        var ndvi = getQuarterlyNDVI(image);
+        
+        // Add the NDVI layer to the map with proper visualization parameters
+        Map.addLayer(ndvi, {min: -1, max: 1, palette: paletteNDVI}, label + ' NDVI');
+      });
+    });
+  });
+});
+
+
